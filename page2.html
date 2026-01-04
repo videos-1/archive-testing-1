@@ -8,40 +8,22 @@
   <style>
     body {
       font-family: system-ui, monospace;
-      background: #020617;
-      color: #e5e7eb;
-      padding: 2rem;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
+      background:#020617;
+      color:#e5e7eb;
+      padding:2rem;
+      display:flex;
+      flex-direction:column;
+      height:100vh;
     }
-
-    h2 {
-      margin-bottom: 1rem;
-    }
-
+    h2 { margin-bottom:1rem; }
     #log {
-      flex: 1;
-      background: #020617;
-      border: 1px solid #334155;
-      padding: 1rem;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      font-size: 0.9rem;
-      margin-bottom: 1rem;
-    }
-
-    #okBtn {
-      align-self: center;
-      padding: 0.7rem 2.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-      background: #22c55e;
-      color: #020617;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      display: none;
+      flex:1;
+      background:#020617;
+      border:1px solid #334155;
+      padding:1rem;
+      overflow-y:auto;
+      white-space:pre-wrap;
+      font-size:.9rem;
     }
   </style>
 </head>
@@ -49,115 +31,114 @@
 
 <h2>Collecting Archive Item Identifiers…</h2>
 <div id="log"></div>
-<button id="okBtn">OK</button>
 
 <script>
-/* ---------------------------------- */
-/* Utilities                          */
-/* ---------------------------------- */
+/* ------------------------------------------------ */
+/* Utilities                                        */
+/* ------------------------------------------------ */
 
 const logBox = document.getElementById("log");
-const okBtn = document.getElementById("okBtn");
 
 const log = msg => {
   logBox.textContent += msg + "\n";
   logBox.scrollTop = logBox.scrollHeight;
 };
 
-const shuffleArray = arr => {
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+const shuffle = arr => {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
 };
 
-/* ---------------------------------- */
-/* Load metadata                      */
-/* ---------------------------------- */
+/* ------------------------------------------------ */
+/* Load metadata                                    */
+/* ------------------------------------------------ */
 
 const stored = sessionStorage.getItem("archive_metadata");
 if (!stored) {
-  alert("No metadata found. Start from index.html");
+  alert("No metadata found. Start from page1.html");
   throw new Error("Missing metadata");
 }
 
 const metadata = JSON.parse(stored);
 const profiles = metadata.data;
 
-log(`Profiles found: ${profiles.length}`);
+/* ------------------------------------------------ */
+/* Extract usernames                                */
+/* ------------------------------------------------ */
 
-/* ---------------------------------- */
-/* Extract usernames                  */
-/* ---------------------------------- */
+const extractUsername = url => {
+  const m = url.match(/\/details\/@([^/]+)/);
+  return m ? m[1] : null;
+};
 
-function extractUsername(url) {
-  const match = url.match(/\/details\/@([^/]+)/);
-  return match ? match[1] : null;
-}
-
-const usernames = profiles
+let usernames = profiles
   .map(p => extractUsername(p.archive_profile_url))
   .filter(Boolean);
 
-log(`Valid accounts detected: ${usernames.length}`);
-usernames.forEach(u => log("• " + u));
+/* ------------------------------------------------ */
+/* Randomize ONCE (never repeated)                  */
+/* ------------------------------------------------ */
 
-/* ---------------------------------- */
-/* Archive Advanced Search (IDENTIFIER ONLY) */
-/* ---------------------------------- */
+shuffle(usernames);
 
-async function fetchUserIdentifiers(username) {
-  const query = `creator:"${username}"`;
+log(`Profiles queued: ${usernames.length}`);
 
+/* ------------------------------------------------ */
+/* Fetch identifiers (1 request per user)           */
+/* ------------------------------------------------ */
+
+async function fetchIdentifiers(username) {
   const url =
     "https://archive.org/advancedsearch.php" +
-    "?q=" + encodeURIComponent(query) +
+    "?q=" + encodeURIComponent(`creator:"${username}"`) +
     "&fl[]=identifier" +
     "&rows=10000" +
     "&page=1" +
     "&output=json";
 
-  log(`\nFetching identifiers for: ${username}`);
-
   const res = await fetch(url);
   const json = await res.json();
-
   return json.response?.docs || [];
 }
 
-/* ---------------------------------- */
-/* Main execution                     */
-/* ---------------------------------- */
+/* ------------------------------------------------ */
+/* Main Execution (2 requests / second)              */
+/* ------------------------------------------------ */
 
 (async () => {
-  let collectedItems = [];
+  const collectedItems = [];
 
-  for (const user of usernames) {
+  for (let i = 0; i < usernames.length; i++) {
+    const user = usernames[i];
+
+    log(`\n[${i + 1}/${usernames.length}] Fetching → ${user}`);
+
     try {
-      const items = await fetchUserIdentifiers(user);
+      const items = await fetchIdentifiers(user);
 
-      log(`✔ ${items.length} identifiers found for ${user}`);
+      log(`✔ ${items.length} items`);
 
-      items.forEach(item => {
+      for (const it of items) {
         collectedItems.push({
-          identifier: item.identifier,
+          identifier: it.identifier,
           owner: user
         });
+      }
 
-        // Display identifier
-        log(`   • ${item.identifier}`);
-      });
-
-    } catch (err) {
-      log(`✖ Failed for ${user}: ${err.message}`);
+    } catch (e) {
+      log(`✖ Failed: ${e.message}`);
     }
+
+    /* ---- Rate limit: exactly 2 req / second ---- */
+    await sleep(500);
   }
 
-  log(`\nTotal identifiers collected: ${collectedItems.length}`);
+  shuffle(collectedItems);
 
-  shuffleArray(collectedItems);
-
-  // Store for page3
   sessionStorage.setItem(
     "archive_items",
     JSON.stringify({
@@ -166,13 +147,12 @@ async function fetchUserIdentifiers(username) {
     })
   );
 
-  log("\n✔ Data ready. Click OK to continue.");
-  okBtn.style.display = "inline-block";
-})();
+  log(`\n✔ DONE`);
+  log(`Total identifiers: ${collectedItems.length}`);
+  log(`Redirecting to page3.html`);
 
-okBtn.addEventListener("click", () => {
   window.location.href = "page3.html";
-});
+})();
 </script>
 
 </body>
