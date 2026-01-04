@@ -110,6 +110,29 @@ iframe {
   width: 100%;
   height: 100%;
 }
+
+/* Share overlay */
+#shareOverlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+#shareOverlayContent {
+  background: #020617;
+  color:#e5e7eb;
+  border:1px solid #334155;
+  padding:1rem;
+  max-width:90%;
+  max-height:80vh;
+  overflow-y:auto;
+  border-radius:8px;
+  text-align:center;
+}
 </style>
 </head>
 
@@ -131,8 +154,9 @@ iframe {
   <div id="bottomBox">
     <span class="icon" id="chatBtn">💬</span>
     <span class="icon" id="embedBtn">⛶</span>
+    <span class="icon" id="shareBtn">🔗</span>
     <span class="icon" id="infoBtn">…</span>
-    <span class="icon">➤</span>
+    <span class="icon" id="arrowBtn">➤</span>
   </div>
 
 </div>
@@ -153,6 +177,22 @@ iframe {
 <!-- Embed overlay -->
 <div id="embedOverlay">
   <iframe id="embedFrame"></iframe>
+</div>
+
+<!-- Share overlay -->
+<div id="shareOverlay">
+  <div id="shareOverlayContent">
+    <h3>Share Link</h3>
+    <p><a id="shareLink" href="" target="_blank"></a></p>
+    <p id="shareMediaType"></p>
+    <button id="copyLinkBtn">Copy link</button>
+    <h4>Share to app inside website</h4>
+    <ul style="list-style:none;padding:0;">
+      <li><a id="app1Link" href="" target="_blank">App1</a></li>
+      <li><a id="app2Link" href="" target="_blank">App2</a></li>
+    </ul>
+    <p><em>Click outside overlay or press Esc to close.</em></p>
+  </div>
 </div>
 
 <script>
@@ -182,6 +222,8 @@ const reviewOverlay = document.getElementById("reviewOverlay");
 const reviewFrame = document.getElementById("reviewFrame");
 const embedOverlay = document.getElementById("embedOverlay");
 const embedFrame = document.getElementById("embedFrame");
+const shareOverlay = document.getElementById("shareOverlay");
+const shareLinkEl = document.getElementById("shareLink");
 
 /* ------------------------------ */
 /* Helpers                        */
@@ -261,6 +303,7 @@ document.getElementById("closePopup").onclick = () => {
 document.getElementById("chatBtn").onclick = () => {
   reviewFrame.src = reviewUrl(items[index].identifier);
   reviewOverlay.style.display = "block";
+  history.pushState({overlay:'review', index:index}, null, null);
 };
 
 reviewOverlay.onclick = () => {
@@ -275,11 +318,58 @@ reviewOverlay.onclick = () => {
 document.getElementById("embedBtn").onclick = () => {
   embedFrame.src = embedUrl(items[index].identifier);
   embedOverlay.style.display = "block";
+  history.pushState({overlay:'embed', index:index}, null, null);
 };
 
 embedOverlay.onclick = () => {
   embedOverlay.style.display = "none";
   embedFrame.src = "";
+};
+
+/* ------------------------------ */
+/* Share overlay (🔗)              */
+/* ------------------------------ */
+
+/* Shared function that displays the share overlay */
+async function openShareOverlay() {
+  const id = items[index].identifier;
+  const baseLink = "https://yan-1-related-1.github.io/yan-1-website-shared-links-redirecting/archive-testing-1-page-shared-links-redirecting.html?identifier=";
+  const link = baseLink + id;
+  shareLinkEl.href = link;
+  shareLinkEl.textContent = link;
+
+  // Example app links inside the website
+  document.getElementById("app1Link").href = `https://yan-1-related-1.github.io/app1.html?identifier=${id}`;
+  document.getElementById("app2Link").href = `https://yan-1-related-1.github.io/app2.html?identifier=${id}`;
+
+  // Show media type
+  const meta = await fetchMetadata(id);
+  document.getElementById("shareMediaType").textContent = meta.mediatype ? `Media Type: ${meta.mediatype}` : '';
+
+  shareOverlay.style.display = "flex";
+  history.pushState({overlay:'share', index:index}, null, null);
+}
+
+document.getElementById("shareBtn").onclick = openShareOverlay;
+document.getElementById("arrowBtn").onclick = openShareOverlay;
+
+shareOverlay.onclick = (e) => {
+  if (e.target.id === 'shareOverlay') {
+    shareOverlay.style.display = "none";
+  }
+};
+
+document.getElementById("copyLinkBtn").onclick = async () => {
+  const link = shareLinkEl.href;
+  try {
+    await navigator.clipboard.writeText(link);
+    const btn = document.getElementById("copyLinkBtn");
+    const old = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(()=>{btn.textContent = old;}, 2000);
+  } catch(e) {
+    alert("Copy failed");
+  }
 };
 
 /* ------------------------------ */
@@ -293,6 +383,44 @@ document.getElementById("nextBtn").onclick = () => {
 document.getElementById("prevBtn").onclick = () => {
   if (index > 0) showItem(--index);
 };
+
+/* ------------------------------ */
+/* Popstate (back navigation)     */
+/* ------------------------------ */
+
+window.addEventListener('popstate', () => {
+  if (reviewOverlay.style.display === "block") {
+    reviewOverlay.style.display = "none";
+    reviewFrame.src = "";
+  }
+  if (embedOverlay.style.display === "block") {
+    embedOverlay.style.display = "none";
+    embedFrame.src = "";
+  }
+  if (shareOverlay.style.display === "flex") {
+    shareOverlay.style.display = "none";
+  }
+});
+
+/* ------------------------------ */
+/* Escape key closes overlays    */
+/* ------------------------------ */
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (reviewOverlay.style.display === "block") {
+      reviewOverlay.style.display = "none";
+      reviewFrame.src = "";
+    }
+    if (embedOverlay.style.display === "block") {
+      embedOverlay.style.display = "none";
+      embedFrame.src = "";
+    }
+    if (shareOverlay.style.display === "flex") {
+      shareOverlay.style.display = "none";
+    }
+  }
+});
 
 /* ------------------------------ */
 /* Init                           */
