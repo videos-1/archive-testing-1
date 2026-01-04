@@ -96,6 +96,20 @@ iframe {
   width: 100%;
   height: 100%;
 }
+
+/* Embed full‑screen overlay */
+#embedOverlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: none;
+  z-index: 999;
+}
+
+#embedOverlay iframe {
+  width: 100%;
+  height: 100%;
+}
 </style>
 </head>
 
@@ -116,6 +130,7 @@ iframe {
 
   <div id="bottomBox">
     <span class="icon" id="chatBtn">💬</span>
+    <span class="icon" id="embedBtn">⛶</span>
     <span class="icon" id="infoBtn">…</span>
     <span class="icon">➤</span>
   </div>
@@ -133,6 +148,11 @@ iframe {
 <!-- Review overlay -->
 <div id="reviewOverlay">
   <iframe id="reviewFrame"></iframe>
+</div>
+
+<!-- Embed overlay -->
+<div id="embedOverlay">
+  <iframe id="embedFrame"></iframe>
 </div>
 
 <script>
@@ -160,6 +180,8 @@ const preloadFrame = document.getElementById("preloadFrame");
 const metaBody = document.getElementById("metaBody");
 const reviewOverlay = document.getElementById("reviewOverlay");
 const reviewFrame = document.getElementById("reviewFrame");
+const embedOverlay = document.getElementById("embedOverlay");
+const embedFrame = document.getElementById("embedFrame");
 
 /* ------------------------------ */
 /* Helpers                        */
@@ -244,6 +266,20 @@ document.getElementById("chatBtn").onclick = () => {
 reviewOverlay.onclick = () => {
   reviewOverlay.style.display = "none";
   reviewFrame.src = "";
+};
+
+/* ------------------------------ */
+/* Full‑screen embed (⛶)          */
+/* ------------------------------ */
+
+document.getElementById("embedBtn").onclick = () => {
+  embedFrame.src = embedUrl(items[index].identifier);
+  embedOverlay.style.display = "block";
+};
+
+embedOverlay.onclick = () => {
+  embedOverlay.style.display = "none";
+  embedFrame.src = "";
 };
 
 /* ------------------------------ */
