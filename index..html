@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Main Index</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #020617;
+      color: #e5e7eb;
+      font-family: system-ui, Arial, sans-serif;
+    }
+
+    /* INITIAL UI (status + options) */
+    #ui {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    header {
+      padding: 1rem;
+      border-bottom: 1px solid #1e293b;
+    }
+
+    #status {
+      font-size: 0.95rem;
+    }
+
+    #options {
+      padding: 1rem;
+      display: none;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .option-btn {
+      padding: 0.6rem 1.2rem;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .option-btn:hover {
+      background: #1d4ed8;
+    }
+
+    /* FINAL FULLSCREEN VIEW */
+    #viewer {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #viewer iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* INVISIBLE RUNNER */
+    #runner {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- INITIAL UI -->
+<div id="ui">
+  <header>
+    <div id="status">System initializing…</div>
+  </header>
+
+  <div id="options"></div>
+</div>
+
+<!-- FINAL FULLSCREEN VIEW -->
+<div id="viewer">
+  <iframe id="viewerFrame"></iframe>
+</div>
+
+<!-- INVISIBLE PIPELINE -->
+<iframe id="runner" src="page1.html"></iframe>
+
+<script>
+  const statusText = document.getElementById("status");
+  const optionsBox = document.getElementById("options");
+  const ui = document.getElementById("ui");
+
+  const viewer = document.getElementById("viewer");
+  const viewerFrame = document.getElementById("viewerFrame");
+
+  const runner = document.getElementById("runner");
+
+  const OPTIONS = ["REALM", "ARC", "FLASH", "VERSE", "CATCHY"];
+
+  /* Listen to page3 */
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+
+    /* Page3 asks to show options */
+    if (data?.type === "SELECT_A_OPTION") {
+      statusText.textContent = "Select an option";
+      showOptions();
+    }
+
+    /* Page3 confirms final page */
+    if (data?.type === "FINAL_PAGE_READY") {
+      const page = data.page;
+
+      /* 🔥 REMOVE ALL UI */
+      ui.remove();
+
+      /* 🔥 SHOW FINAL PAGE FULLSCREEN */
+      viewerFrame.src = page;
+      viewer.style.display = "block";
+    }
+  });
+
+  function showOptions() {
+    optionsBox.innerHTML = "";
+    optionsBox.style.display = "flex";
+
+    OPTIONS.forEach(option => {
+      const btn = document.createElement("button");
+      btn.className = "option-btn";
+      btn.textContent = option;
+
+      btn.onclick = () => {
+        statusText.textContent = `Selected: ${option}`;
+        optionsBox.style.display = "none";
+
+        /* Send selection to page3 */
+        runner.contentWindow.postMessage(
+          { type: "OPTION_SELECTED", option },
+          "*"
+        );
+      };
+
+      optionsBox.appendChild(btn);
+    });
+  }
+</script>
+
+</body>
+</html>
