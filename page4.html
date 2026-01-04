@@ -200,13 +200,13 @@ iframe {
 /* Load & filter items            */
 /* ------------------------------ */
 
-const stored = sessionStorage.getItem("archive_media_items");
+const stored = sessionStorage.getItem("archive_final_items");
 if (!stored) throw new Error("No data");
 
 const rawItems = JSON.parse(stored).items || [];
 
-const VALID = ["image","images","movie","movies"];
-const items = rawItems.filter(i => VALID.includes(i.mediatype));
+const items = rawItems;
+
 
 let index = 0;
 const metadataCache = new Map();
