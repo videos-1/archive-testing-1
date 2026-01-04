@@ -16,14 +16,8 @@
       height: 100vh;
     }
 
-    h2 {
-      margin-bottom: 0.5rem;
-    }
-
-    #status {
-      color: #94a3b8;
-      margin-bottom: 1rem;
-    }
+    h2 { margin-bottom: 0.5rem; }
+    #status { color: #94a3b8; margin-bottom: 1rem; }
 
     #log {
       flex: 1;
@@ -59,7 +53,6 @@ const log = msg => {
 /* ---------------------------------- */
 
 const stored = sessionStorage.getItem("archive_items");
-
 if (!stored) {
   alert("No items found. Start from page2.html");
   throw new Error("Missing archive_items");
@@ -71,19 +64,38 @@ const items = data.items || [];
 statusBox.textContent = `Total identifiers received: ${items.length}`;
 
 /* ---------------------------------- */
-/* Media detection helpers            */
+/* Archive official media detection   */
 /* ---------------------------------- */
 
-const IMAGE_EXT = ["jpg", "jpeg", "png", "gif", "webp", "tif"];
-const VIDEO_EXT = ["mp4", "mkv", "avi", "mov", "webm", "mpeg"];
+function detectMediaFromArchive(meta) {
+  const types = new Set();
 
-function detectMediaType(files = []) {
-  for (const file of files) {
-    const ext = (file.name || "").split(".").pop().toLowerCase();
-    if (IMAGE_EXT.includes(ext)) return "image";
-    if (VIDEO_EXT.includes(ext)) return "movie";
+  const archiveType = meta.metadata?.mediatype;
+
+  switch (archiveType) {
+    case "movies": types.add("movie"); break;
+    case "audio":  types.add("audio"); break;
+    case "texts":  types.add("text");  break;
+    case "image":  types.add("image"); break;
   }
-  return null;
+
+  for (const f of meta.files || []) {
+    const format = (f.format || "").toLowerCase();
+
+    if (format.includes("mp4") || format.includes("mpeg") || format.includes("matroska"))
+      types.add("movie");
+
+    if (format.includes("mp3") || format.includes("flac") || format.includes("ogg") || format.includes("wav"))
+      types.add("audio");
+
+    if (format.includes("pdf") || format.includes("text") || format.includes("epub"))
+      types.add("text");
+
+    if (format.includes("jpeg") || format.includes("png") || format.includes("image"))
+      types.add("image");
+  }
+
+  return [...types];
 }
 
 /* ---------------------------------- */
@@ -97,53 +109,105 @@ async function fetchMetadata(identifier) {
 }
 
 /* ---------------------------------- */
-/* Main execution                     */
+/* Main execution (5 at a time)        */
 /* ---------------------------------- */
 
 (async () => {
-  const filtered = [];
-  let processed = 0;
+  const processedItems = [];
+  const CONCURRENCY = 5;
+  let index = 0;
 
-  for (const item of items) {
-    try {
-      const meta = await fetchMetadata(item.identifier);
-      const mediaType = detectMediaType(meta.files);
+  async function worker() {
+    while (index < items.length) {
+      const current = items[index++];
+      try {
+        const meta = await fetchMetadata(current.identifier);
+        const types = detectMediaFromArchive(meta);
 
-      if (mediaType) {
-        filtered.push({
-          identifier: item.identifier,
-          owner: item.owner,
-          mediatype: mediaType
+        processedItems.push({
+          identifier: current.identifier,
+          owner: current.owner,
+          types
         });
 
-        log(`✔ ${item.identifier} → ${mediaType}`);
-      } else {
-        log(`✖ ${item.identifier} → skipped`);
+        log(`✔ ${current.identifier} → ${types.join(", ") || "none"}`);
+      } catch {
+        log(`⚠ ${current.identifier} → error`);
       }
-
-    } catch (err) {
-      log(`⚠ ${item.identifier} → error`);
     }
-
-    processed++;
-    statusBox.textContent =
-      `Processed ${processed} / ${items.length} | Valid media: ${filtered.length}`;
   }
 
-  /* Save for page4 */
-  sessionStorage.setItem(
-    "archive_media_items",
-    JSON.stringify({
-      total: filtered.length,
-      items: filtered
-    })
+  const workers = Array.from({ length: CONCURRENCY }, worker);
+  await Promise.all(workers);
+
+  statusBox.textContent = "Filtering complete. Waiting for selection…";
+
+  /* 🔔 Tell index.html to show options */
+  window.parent.postMessage(
+    { type: "SELECT_A_OPTION" },
+    "*"
   );
 
-  log("\n✔ Filtering complete. Redirecting to page4.html…");
+  /* ---------------------------------- */
+  /* Receive option from index.html     */
+  /* ---------------------------------- */
 
-  setTimeout(() => {
-    window.location.href = "page4.html";
-  }, 1500);
+  window.addEventListener("message", (event) => {
+    if (event.data?.type !== "OPTION_SELECTED") return;
+
+    const option = event.data.option;
+    let targetPage = "";
+    let payload = [];
+
+    switch (option) {
+      case "REALM":
+        payload = processedItems;
+        targetPage = "page4.html";
+        break;
+
+      case "ARC":
+        payload = processedItems.filter(i => i.types.includes("movie"));
+        targetPage = "page5.html";
+        break;
+
+      case "FLASH":
+        payload = processedItems.filter(i => i.types.includes("image"));
+        targetPage = "page6.html";
+        break;
+
+      case "VERSE":
+        payload = processedItems.filter(i => i.types.includes("text"));
+        targetPage = "page7.html";
+        break;
+
+      case "CATCHY":
+        payload = processedItems.filter(i => i.types.includes("audio"));
+        targetPage = "page8.html";
+        break;
+
+      default:
+        log("❌ Unknown option received");
+        return;
+    }
+
+    sessionStorage.setItem(
+      "archive_final_items",
+      JSON.stringify({
+        option,
+        total: payload.length,
+        items: payload
+      })
+    );
+
+    log(`\n➡ Final page decided: ${targetPage}`);
+    log(`📦 Items passed: ${payload.length}`);
+
+    window.parent.postMessage(
+      { type: "FINAL_PAGE_READY", page: targetPage },
+      "*"
+    );
+  });
+
 })();
 </script>
 
