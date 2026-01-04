@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Archive Media Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #020617;
+  color: #e5e7eb;
+  font-family: system-ui, monospace;
+}
+
+#topBox, #bottomBox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  user-select: none;
+}
+
+#topBox {
+  height: 60px;
+  border-bottom: 1px solid #334155;
+}
+
+#bottomBox {
+  height: 1cm;
+  border-top: 1px solid #334155;
+}
+
+#centerBox {
+  flex: 1;
+  position: relative;
+}
+
+.icon {
+  font-size: 1.6rem;
+  cursor: pointer;
+}
+
+.center-icon {
+  font-size: 1.8rem;
+}
+
+iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* Metadata popup */
+#popup {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+#popupContent {
+  background: #020617;
+  border: 1px solid #334155;
+  padding: 1rem;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  border-radius: 8px;
+}
+
+#popupContent h3 {
+  margin-top: 0;
+  color: #22c55e;
+}
+
+.closeBtn {
+  text-align: right;
+  cursor: pointer;
+  color: #38bdf8;
+}
+
+/* Review iframe */
+#reviewOverlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: none;
+  z-index: 999;
+}
+
+#reviewOverlay iframe {
+  width: 100%;
+  height: 100%;
+}
+</style>
+</head>
+
+<body>
+
+<div style="display:flex;flex-direction:column;height:100%;">
+
+  <div id="topBox">
+    <span class="icon" id="prevBtn">⬅️</span>
+    <span class="center-icon">🏡</span>
+    <span class="icon" id="nextBtn">➡️</span>
+  </div>
+
+  <div id="centerBox">
+    <iframe id="viewer"></iframe>
+    <iframe id="preloadFrame" style="display:none;"></iframe>
+  </div>
+
+  <div id="bottomBox">
+    <span class="icon" id="chatBtn">💬</span>
+    <span class="icon" id="infoBtn">…</span>
+    <span class="icon">➤</span>
+  </div>
+
+</div>
+
+<!-- Metadata popup -->
+<div id="popup">
+  <div id="popupContent">
+    <div class="closeBtn" id="closePopup">✖ Close</div>
+    <div id="metaBody"></div>
+  </div>
+</div>
+
+<!-- Review overlay -->
+<div id="reviewOverlay">
+  <iframe id="reviewFrame"></iframe>
+</div>
+
+<script>
+/* ------------------------------ */
+/* Load & filter items            */
+/* ------------------------------ */
+
+const stored = sessionStorage.getItem("archive_media_items");
+if (!stored) throw new Error("No data");
+
+const rawItems = JSON.parse(stored).items || [];
+
+const VALID = ["image","images","movie","movies"];
+const items = rawItems.filter(i => VALID.includes(i.mediatype));
+
+let index = 0;
+const metadataCache = new Map();
+
+/* ------------------------------ */
+/* Elements                       */
+/* ------------------------------ */
+
+const viewer = document.getElementById("viewer");
+const preloadFrame = document.getElementById("preloadFrame");
+const metaBody = document.getElementById("metaBody");
+const reviewOverlay = document.getElementById("reviewOverlay");
+const reviewFrame = document.getElementById("reviewFrame");
+
+/* ------------------------------ */
+/* Helpers                        */
+/* ------------------------------ */
+
+const embedUrl = id => `https://archive.org/embed/${id}`;
+const reviewUrl = id => `https://archive.org/details/${id}#reviews`;
+
+async function fetchMetadata(id) {
+  if (metadataCache.has(id)) return metadataCache.get(id);
+
+  const res = await fetch(`https://archive.org/metadata/${id}`);
+  const json = await res.json();
+
+  const meta = {
+    identifier: id,
+    title: json.metadata?.title,
+    creator: json.metadata?.creator,
+    description: json.metadata?.description,
+    tags: json.metadata?.subject,
+    mediatype: json.metadata?.mediatype,
+    publicdate: json.metadata?.publicdate,
+    uploader: json.metadata?.uploader
+  };
+
+  metadataCache.set(id, meta);
+  return meta;
+}
+
+/* ------------------------------ */
+/* Preload ALL metadata           */
+/* ------------------------------ */
+
+Promise.all(items.map(i => fetchMetadata(i.identifier)));
+
+/* ------------------------------ */
+/* Render item                    */
+/* ------------------------------ */
+
+function showItem(i) {
+  viewer.src = embedUrl(items[i].identifier);
+
+  if (items[i + 1]) {
+    preloadFrame.src = embedUrl(items[i + 1].identifier);
+  }
+}
+
+/* ------------------------------ */
+/* Metadata popup                 */
+/* ------------------------------ */
+
+document.getElementById("infoBtn").onclick = async () => {
+  const meta = await fetchMetadata(items[index].identifier);
+
+  metaBody.innerHTML = `
+    <h3>${meta.title || "Untitled"}</h3>
+    <p><b>Identifier:</b> ${meta.identifier}</p>
+    <p><b>Creator:</b> ${meta.creator || "-"}</p>
+    <p><b>Uploader:</b> ${meta.uploader || "-"}</p>
+    <p><b>Media Type:</b> ${meta.mediatype}</p>
+    <p><b>Public Date:</b> ${meta.publicdate || "-"}</p>
+    <p><b>Tags:</b> ${meta.tags || "-"}</p>
+    <p><b>Description:</b><br>${meta.description || "-"}</p>
+  `;
+
+  document.getElementById("popup").style.display = "flex";
+};
+
+document.getElementById("closePopup").onclick = () => {
+  document.getElementById("popup").style.display = "none";
+};
+
+/* ------------------------------ */
+/* Review iframe (💬)             */
+/* ------------------------------ */
+
+document.getElementById("chatBtn").onclick = () => {
+  reviewFrame.src = reviewUrl(items[index].identifier);
+  reviewOverlay.style.display = "block";
+};
+
+reviewOverlay.onclick = () => {
+  reviewOverlay.style.display = "none";
+  reviewFrame.src = "";
+};
+
+/* ------------------------------ */
+/* Navigation                     */
+/* ------------------------------ */
+
+document.getElementById("nextBtn").onclick = () => {
+  if (index < items.length - 1) showItem(++index);
+};
+
+document.getElementById("prevBtn").onclick = () => {
+  if (index > 0) showItem(--index);
+};
+
+/* ------------------------------ */
+/* Init                           */
+/* ------------------------------ */
+
+showItem(index);
+</script>
+
+</body>
+</html>

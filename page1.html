@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Archive Profiles Loader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: system-ui, Arial, sans-serif;
+      background: #020617;
+      color: #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    #status {
+      font-size: 1.1rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="status">Loading archive metadata…</div>
+
+  <script>
+    // ✅ Your real backend URL
+    const BACKEND_URL = "https://archive_urls_profiles_backend.ajaia-backend.workers.dev";
+
+    async function loadMetadata() {
+      try {
+        const response = await fetch(BACKEND_URL, {
+          method: "GET"
+        });
+
+        if (!response.ok) {
+          throw new Error("Backend request failed (" + response.status + ")");
+        }
+
+        const json = await response.json();
+
+        if (!json.success) {
+          throw new Error(json.error || "Unknown backend error");
+        }
+
+        // ✅ Store metadata for page2.html
+        sessionStorage.setItem("archive_metadata", JSON.stringify(json));
+
+        // ✅ Redirect to page2.html
+        window.location.href = "page2.html";
+
+      } catch (err) {
+        document.getElementById("status").textContent =
+          "Error loading data: " + err.message;
+        console.error("Loader error:", err);
+      }
+    }
+
+    // 🚀 Auto-run on load
+    loadMetadata();
+  </script>
+
+</body>
+</html>

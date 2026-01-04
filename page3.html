@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Archive Media Filter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: system-ui, monospace;
+      background: #020617;
+      color: #e5e7eb;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    h2 {
+      margin-bottom: 0.5rem;
+    }
+
+    #status {
+      color: #94a3b8;
+      margin-bottom: 1rem;
+    }
+
+    #log {
+      flex: 1;
+      border: 1px solid #334155;
+      padding: 1rem;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Filtering Media Items…</h2>
+<div id="status"></div>
+<div id="log"></div>
+
+<script>
+/* ---------------------------------- */
+/* Utilities                          */
+/* ---------------------------------- */
+
+const logBox = document.getElementById("log");
+const statusBox = document.getElementById("status");
+
+const log = msg => {
+  logBox.textContent += msg + "\n";
+  logBox.scrollTop = logBox.scrollHeight;
+};
+
+/* ---------------------------------- */
+/* Load identifiers                   */
+/* ---------------------------------- */
+
+const stored = sessionStorage.getItem("archive_items");
+
+if (!stored) {
+  alert("No items found. Start from page2.html");
+  throw new Error("Missing archive_items");
+}
+
+const data = JSON.parse(stored);
+const items = data.items || [];
+
+statusBox.textContent = `Total identifiers received: ${items.length}`;
+
+/* ---------------------------------- */
+/* Media detection helpers            */
+/* ---------------------------------- */
+
+const IMAGE_EXT = ["jpg", "jpeg", "png", "gif", "webp", "tif"];
+const VIDEO_EXT = ["mp4", "mkv", "avi", "mov", "webm", "mpeg"];
+
+function detectMediaType(files = []) {
+  for (const file of files) {
+    const ext = (file.name || "").split(".").pop().toLowerCase();
+    if (IMAGE_EXT.includes(ext)) return "image";
+    if (VIDEO_EXT.includes(ext)) return "movie";
+  }
+  return null;
+}
+
+/* ---------------------------------- */
+/* Fetch metadata                     */
+/* ---------------------------------- */
+
+async function fetchMetadata(identifier) {
+  const res = await fetch(`https://archive.org/metadata/${identifier}`);
+  if (!res.ok) throw new Error("Metadata fetch failed");
+  return res.json();
+}
+
+/* ---------------------------------- */
+/* Main execution                     */
+/* ---------------------------------- */
+
+(async () => {
+  const filtered = [];
+  let processed = 0;
+
+  for (const item of items) {
+    try {
+      const meta = await fetchMetadata(item.identifier);
+      const mediaType = detectMediaType(meta.files);
+
+      if (mediaType) {
+        filtered.push({
+          identifier: item.identifier,
+          owner: item.owner,
+          mediatype: mediaType
+        });
+
+        log(`✔ ${item.identifier} → ${mediaType}`);
+      } else {
+        log(`✖ ${item.identifier} → skipped`);
+      }
+
+    } catch (err) {
+      log(`⚠ ${item.identifier} → error`);
+    }
+
+    processed++;
+    statusBox.textContent =
+      `Processed ${processed} / ${items.length} | Valid media: ${filtered.length}`;
+  }
+
+  /* Save for page4 */
+  sessionStorage.setItem(
+    "archive_media_items",
+    JSON.stringify({
+      total: filtered.length,
+      items: filtered
+    })
+  );
+
+  log("\n✔ Filtering complete. Redirecting to page4.html…");
+
+  setTimeout(() => {
+    window.location.href = "page4.html";
+  }, 1500);
+})();
+</script>
+
+</body>
+</html>
